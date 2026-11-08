@@ -22,7 +22,7 @@ h2+.card,.hero+.card{border-radius:16px 16px 0 0}.card:not(:has(+.card)){border-
 .neg{color:var(--neg)}.pos{color:var(--pos)}.void{opacity:.4;text-decoration:line-through}
 .empty{text-align:center;color:var(--hint);padding:48px 0 24px;line-height:1.7;font-size:15px}
 .nav{position:fixed;left:0;right:0;bottom:0;background:var(--bg);display:flex;justify-content:space-around;padding:8px 8px calc(8px + env(safe-area-inset-bottom));box-shadow:0 -.5px 0 var(--sep)}
-.nav button{background:none;border:0;color:var(--hint);font-size:11px;padding:4px 22px}.nav button.on{color:var(--ac);font-weight:600}
+.nav button{background:none;border:0;color:var(--hint);font-size:11px;padding:4px 12px}.nav button.on{color:var(--ac);font-weight:600}
 .nav svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;display:block;margin:0 auto 2px}
 .fab{position:fixed;right:20px;bottom:calc(84px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:50%;border:0;background:var(--ac);color:#fff;font-size:30px;line-height:1;box-shadow:0 6px 18px #0003}
 #sheet{position:fixed;inset:0;background:#0006;display:none;align-items:flex-end}
@@ -41,6 +41,7 @@ input,select{width:100%;font-size:17px;padding:12px 14px;border-radius:12px;bord
 <button class="fab" onclick="addTx()" aria-label="Додати запис">+</button>
 <nav class="nav"><button id="t-home" onclick="go('home')"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18"/></svg>Рахунки</button>
 <button id="t-hist" onclick="go('hist')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Історія</button>
+<button id="t-cats" onclick="go('cats')"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>Категорії</button>
 <button id="t-bk" onclick="go('bk')"><svg viewBox="0 0 24 24"><path d="M12 4v10m0 0l-4-4m4 4l4-4M5 19h14"/></svg>Копія</button></nav>
 <div id="sheet" onclick="if(event.target===this)closeSheet()"><div id="sheetbox"></div></div>
 <script>
@@ -54,20 +55,20 @@ function load(){try{const d=JSON.parse(localStorage.getItem(K));if(d&&d.accounts
 function save(){try{localStorage.setItem(K,JSON.stringify(D))}catch(e){alert('Не вдалося зберегти дані! Зробіть резервну копію.')}}
 let D=load(),tab='home',F;
 const bal=a=>r2(a.opening+D.tx.reduce((s,t)=>s+(t.acc===a.id?t.amount:0)+(t.xf&&t.to===a.id?t.amountTo:0),0));
-const reversed=id=>D.tx.some(t=>t.rev===id);
+const reversed=id=>D.tx.some(t=>t.rev===id),act=()=>D.accounts.filter(a=>!a.archived);
 function go(t){tab=t;render()}
-function render(){for(const t of['home','hist','bk'])$('t-'+t).className=tab===t?'on':'';$('app').innerHTML={home,hist,bk}[tab]()}
+function render(){for(const t of['home','hist','cats','bk'])$('t-'+t).className=tab===t?'on':'';$('app').innerHTML={home,hist,cats:catsView,bk}[tab]()}
 function home(){
   const tot={},fl={},m=now().slice(0,7),cur=id=>D.accounts.find(a=>a.id===id).currency;
-  D.accounts.forEach(a=>tot[a.currency]=r2((tot[a.currency]||0)+bal(a)));
-  D.tx.filter(t=>!t.rev&&!t.xf&&!reversed(t.id)&&t.ts.slice(0,7)===m).forEach(t=>{const c=cur(t.acc),f=fl[c]=fl[c]||{i:0,e:0};t.amount>0?f.i+=t.amount:f.e-=t.amount});
+  act().forEach(a=>tot[a.currency]=r2((tot[a.currency]||0)+bal(a)));
+  D.tx.filter(t=>!t.rev&&!t.xf&&!reversed(t.id)&&t.ts.slice(0,7)===m&&!D.accounts.find(a=>a.id===t.acc).archived).forEach(t=>{const c=cur(t.acc),f=fl[c]=fl[c]||{i:0,e:0};t.amount>0?f.i+=t.amount:f.e-=t.amount});
   let h='';
   const days=D.lastExport?(Date.now()-new Date(D.lastExport))/864e5:Infinity;
   if(D.tx.length&&days>30)h+='<div class="warn">⚠️ Давно не було резервної копії. Дані лежать лише на цьому телефоні. Відкрийте вкладку «Копія».</div>';
   const cs=Object.keys(tot);
   h+=cs.map(c=>{const f=fl[c]||{i:0,e:0};return `<div class="hero"><div class="sub">Баланс · ${c}</div><div class="num">${money(tot[c],c)}</div><div class="mo"><span class="pos">↑ ${money(f.i,c)}</span><span class="neg">↓ ${money(f.e,c)}</span><span class="sub" style="margin:0">цього місяця</span></div></div>`}).join('');
-  if(!D.accounts.length)h+='<div class="empty">👛<br>Створіть перший рахунок,<br>щоб почати</div>';
-  if(D.accounts.length)h+='<h2>Рахунки</h2>';h+=D.accounts.map(a=>`<div class="card"><div class="l"><div class="ic">${ICON[a.kind]||'👛'}</div><div>${esc(a.name)}<div class="sub">${a.currency}</div></div></div><div class="big">${money(bal(a),a.currency)}</div></div>`).join('');
+  if(!act().length)h+='<div class="empty">👛<br>Створіть перший рахунок,<br>щоб почати</div>';
+  if(act().length)h+='<h2>Рахунки</h2><div class="sub" style="margin:-4px 4px 8px">Натисніть на рахунок, щоб змінити назву або видалити</div>';h+=act().map(a=>`<div class="card" onclick="editAccount(${a.id})" style="cursor:pointer"><div class="l"><div class="ic">${ICON[a.kind]||'👛'}</div><div>${esc(a.name)}<div class="sub">${a.currency}</div></div></div><div class="big">${money(bal(a),a.currency)}</div></div>`).join('');
   return h+'<button class="btn" onclick="addAccount()">+ Новий рахунок</button>';
 }
 function amtHtml(t,a){
@@ -98,6 +99,34 @@ function undo(id){if(!confirm('Додати зворотний запис? Ор�
   if(t.xf)Object.assign(n,{xf:true,acc:t.to,to:t.acc,amount:-t.amountTo,amountTo:-t.amount,note:'Скасування переказу #'+id});
   else Object.assign(n,{acc:t.acc,cat:t.cat,amount:-t.amount,note:'Скасування запису #'+id});
   D.tx.push(n);save();render()}
+const EM=['🛒','🍔','🚌','🏠','💊','🎮','👕','🎁','✈️','📚','🐶','💼','📈','💰'];
+function editAccount(id){const a=D.accounts.find(x=>x.id===id);
+  sheet(`<h2 style="margin-top:0">Рахунок</h2><input id="en" value="${esc(a.name)}" maxlength="30">
+  <div class="sub" style="margin:2px 4px">${ICON[a.kind]||''} ${a.currency} · ${money(bal(a),a.currency)}</div>
+  <button class="btn" onclick="renameAccount(${id})">Зберегти назву</button>
+  <button class="btn g" style="color:var(--neg)" onclick="delAccount(${id})">Видалити рахунок</button>`)}
+function renameAccount(id){const n=$('en').value.trim().slice(0,30);if(!n)return;D.accounts.find(x=>x.id===id).name=n;save();closeSheet();render()}
+function delAccount(id){const a=D.accounts.find(x=>x.id===id),used=D.tx.some(t=>t.acc===id||t.to===id),b=bal(a);
+  const msg=used?`Рахунок «${a.name}» зникне зі списку, але його записи залишаться в історії.${b?` Його баланс (${money(b,a.currency)}) більше не враховуватиметься в підсумках.`:''} Продовжити?`:`Видалити порожній рахунок «${a.name}»?`;
+  if(!confirm(msg))return;
+  if(used)a.archived=true;else D.accounts=D.accounts.filter(x=>x.id!==id);save();closeSheet();render()}
+function catsView(){
+  let h='<h1>Категорії</h1>';
+  for(const [t,title] of [['expense','Витрати'],['income','Доходи']])
+    h+=`<h2>${title}</h2>`+D.cats.filter(c=>c.type===t&&!c.archived).map(c=>`<div class="card" onclick="catSheet(${c.id})" style="cursor:pointer">${esc(c.name)}<span class="sub" style="margin:0">›</span></div>`).join('')+`<button class="btn g" onclick="catSheet(0,'${t}')">+ Нова категорія</button>`;
+  return h}
+function catSheet(id,type){const c=id?D.cats.find(x=>x.id===id):null,t=c?c.type:type;
+  sheet(`<h2 style="margin-top:0">${c?'Категорія':'Нова категорія · '+(t==='income'?'доходи':'витрати')}</h2>
+  <input id="cn" placeholder="Назва" maxlength="30" value="${esc(c?c.name:'')}">
+  <div class="chips">${EM.map(e=>`<button class="chip" onclick="setEmoji('${e}')">${e}</button>`).join('')}</div>
+  <button class="btn" onclick="saveCat(${id||0},'${t}')">Зберегти</button>
+  ${c?`<button class="btn g" style="color:var(--neg)" onclick="delCat(${id})">Видалити категорію</button>`:''}`)}
+function setEmoji(e){const i=$('cn');i.value=e+' '+i.value.replace(/^[^\p{L}\p{N}]+/u,'')}
+function saveCat(id,type){const n=$('cn').value.trim().slice(0,30);if(!n)return;
+  if(id)D.cats.find(x=>x.id===id).name=n;else D.cats.push({id:D.seq++,type,name:n});save();closeSheet();render()}
+function delCat(id){const c=D.cats.find(x=>x.id===id),used=D.tx.some(t=>t.cat===id);
+  if(!confirm(used?`Категорія «${c.name}» зникне зі списку, але старі записи збережуть її назву.`:`Видалити категорію «${c.name}»?`))return;
+  if(used)c.archived=true;else D.cats=D.cats.filter(x=>x.id!==id);save();closeSheet();render()}
 function addAccount(){
   sheet(`<h2 style="margin-top:0">Новий рахунок</h2><input id="an" placeholder="Назва (напр. Моно, Гаманець)" maxlength="30">
   <div class="seg" id="ak">${Object.entries({cash:'Готівка',card:'Картка',bank:'Банк'}).map(([k,v],i)=>`<button data-k="${k}" class="${i?'':'on'}" onclick="pickKind(this)">${v}</button>`).join('')}</div>
@@ -107,9 +136,9 @@ function addAccount(){
 function pickKind(b){[...b.parentNode.children].forEach(x=>x.className='');b.className='on'}
 function saveAccount(){const name=$('an').value.trim();if(!name)return;
   D.accounts.push({id:D.seq++,name,kind:document.querySelector('#ak .on').dataset.k,currency:$('ac').value,opening:r2(parseFloat($('ao').value.replace(',','.'))||0)});save();closeSheet();render()}
-function addTx(){if(!D.accounts.length)return addAccount();F={type:'expense',cat:null,acc:D.accounts[0].id};txSheet();$('amt').focus()}
+function addTx(){if(!act().length)return addAccount();F={type:'expense',cat:null,acc:act()[0].id};txSheet();$('amt').focus()}
 function txSheet(){
-  const A=D.accounts;
+  const A=act();
   if(F.type==='transfer'&&A.length<2){alert('Для переказу потрібно щонайменше два рахунки.');F.type='expense'}
   const xf=F.type==='transfer',keep=['amt','amt2','note'].map(i=>$(i)?.value||''),from=A.find(a=>a.id===F.acc);
   if(xf&&(F.to===undefined||F.to===F.acc))F.to=A.find(a=>a.id!==F.acc).id;
@@ -121,7 +150,7 @@ function txSheet(){
     <div class="sub" style="margin:4px 4px 0">На рахунок</div><select onchange="F.to=+this.value;txSheet()">${opt(F.to)}</select>
     ${to.currency!==from.currency?`<div class="sub" style="margin:4px 4px 0">Скільки зарахується (${to.currency})</div><input id="amt2" type="number" inputmode="decimal" placeholder="0 ${to.currency}" value="${keep[1]}">`:''}
     <input id="note" placeholder="Коментар (необов'язково)" maxlength="200" value="${esc(keep[2])}"><button class="btn" onclick="saveTx()">Зберегти</button>`);return}
-  const cats=D.cats.filter(c=>c.type===F.type);
+  const cats=D.cats.filter(c=>c.type===F.type&&!c.archived);
   sheet(`${seg}<input id="amt" class="amt" type="number" inputmode="decimal" placeholder="0 ${from.currency}" value="${keep[0]}">
   <select onchange="F.acc=+this.value;txSheet()">${opt(F.acc)}</select>
   <div class="chips">${cats.map(c=>`<button class="chip ${F.cat===c.id?'on':''}" onclick="F.cat=${c.id};txSheet()">${esc(c.name)}</button>`).join('')}<button class="chip" onclick="newCat()">＋</button></div>
