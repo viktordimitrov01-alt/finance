@@ -22,7 +22,7 @@ h2+.card,.hero+.card{border-radius:16px 16px 0 0}.card:not(:has(+.card)){border-
 .neg{color:var(--neg)}.pos{color:var(--pos)}.void{opacity:.4;text-decoration:line-through}
 .empty{text-align:center;color:var(--hint);padding:48px 0 24px;line-height:1.7;font-size:15px}
 .nav{position:fixed;left:0;right:0;bottom:0;background:var(--bg);display:flex;justify-content:space-around;padding:8px 8px calc(8px + env(safe-area-inset-bottom));box-shadow:0 -.5px 0 var(--sep)}
-.nav button{background:none;border:0;color:var(--hint);font-size:11px;padding:4px 12px}.nav button.on{color:var(--ac);font-weight:600}
+.nav button{background:none;border:0;color:var(--hint);font-size:10px;padding:4px 6px}.nav button.on{color:var(--ac);font-weight:600}
 .nav svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;display:block;margin:0 auto 2px}
 .fab{position:fixed;right:20px;bottom:calc(84px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:50%;border:0;background:var(--ac);color:#fff;font-size:30px;line-height:1;box-shadow:0 6px 18px #0003}
 #sheet{position:fixed;inset:0;background:#0006;display:none;align-items:flex-end}
@@ -36,11 +36,17 @@ input,select{width:100%;font-size:17px;padding:12px 14px;border-radius:12px;bord
 .link{background:none;border:0;color:var(--ac);font-size:13px;padding:4px 0}
 .amt{font-size:40px;font-weight:700;text-align:center;background:none;margin:2px 0 10px}
 .warn{background:#ff9f0a22;border-radius:14px;padding:12px 14px;margin-bottom:12px;font-size:14px}
+.stats{display:flex;gap:8px;margin:14px 0 4px}.stat{flex:1;background:var(--bg);border-radius:14px;padding:10px 12px;font-size:12px;color:var(--hint)}.stat b{display:block;font-size:15px;margin-top:3px;color:var(--tx)}
+.chart{background:var(--bg);border-radius:16px;padding:14px 12px 8px;margin-top:8px}.chart svg{width:100%;display:block}
+.bi{fill:var(--pos)}.be{fill:var(--neg)}.lb{fill:var(--hint);font-size:9px}
+.grp{border-radius:16px;overflow:hidden;background:var(--bg)}.rw{padding:11px 16px;box-shadow:inset 0 -.5px 0 var(--sep)}
+.rt{display:flex;justify-content:space-between;gap:8px;font-size:15px;margin-bottom:7px}.tr{height:6px;border-radius:3px;background:var(--bg2);overflow:hidden}.tr i{display:block;height:100%;border-radius:3px}
 </style></head><body>
 <div id="app"></div>
 <button class="fab" onclick="addTx()" aria-label="Додати запис">+</button>
 <nav class="nav"><button id="t-home" onclick="go('home')"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18"/></svg>Рахунки</button>
 <button id="t-hist" onclick="go('hist')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Історія</button>
+<button id="t-rep" onclick="go('rep')"><svg viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Звіт</button>
 <button id="t-cats" onclick="go('cats')"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>Категорії</button>
 <button id="t-bk" onclick="go('bk')"><svg viewBox="0 0 24 24"><path d="M12 4v10m0 0l-4-4m4 4l4-4M5 19h14"/></svg>Копія</button></nav>
 <div id="sheet" onclick="if(event.target===this)closeSheet()"><div id="sheetbox"></div></div>
@@ -57,7 +63,7 @@ let D=load(),tab='home',F;
 const bal=a=>r2(a.opening+D.tx.reduce((s,t)=>s+(t.acc===a.id?t.amount:0)+(t.xf&&t.to===a.id?t.amountTo:0),0));
 const reversed=id=>D.tx.some(t=>t.rev===id),act=()=>D.accounts.filter(a=>!a.archived);
 function go(t){tab=t;render()}
-function render(){for(const t of['home','hist','cats','bk'])$('t-'+t).className=tab===t?'on':'';$('app').innerHTML={home,hist,cats:catsView,bk}[tab]()}
+function render(){for(const t of['home','hist','rep','cats','bk'])$('t-'+t).className=tab===t?'on':'';$('app').innerHTML={home,hist,rep:reportView,cats:catsView,bk}[tab]()}
 function home(){
   const tot={},fl={},m=now().slice(0,7),cur=id=>D.accounts.find(a=>a.id===id).currency;
   act().forEach(a=>tot[a.currency]=r2((tot[a.currency]||0)+bal(a)));
@@ -99,6 +105,44 @@ function undo(id){if(!confirm('Додати зворотний запис? Ор�
   if(t.xf)Object.assign(n,{xf:true,acc:t.to,to:t.acc,amount:-t.amountTo,amountTo:-t.amount,note:'Скасування переказу #'+id});
   else Object.assign(n,{acc:t.acc,cat:t.cat,amount:-t.amount,note:'Скасування запису #'+id});
   D.tx.push(n);save();render()}
+const R={p:'m',cur:null,t:'expense',data:null};
+const PL={w:'останні 7 днів',m:'останні 30 днів',y:'останні 12 місяців',a:'за весь час'};
+const lk=d=>new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10);
+function monthKeys(from,to){const k=[];let[y,m]=from.split('-').map(Number);const[Y,M]=to.split('-').map(Number);
+  while(y<Y||(y===Y&&m<=M)){k.push(y+'-'+String(m).padStart(2,'0'));if(++m>12){m=1;y++}}return k}
+function buckets(){
+  const n=new Date(),cm=lk(n).slice(0,7);let keys=[],mode=10;
+  if(R.p==='w'||R.p==='m'){for(let i=(R.p==='w'?6:29);i>=0;i--){const d=new Date(n);d.setDate(n.getDate()-i);keys.push(lk(d))}}
+  else{let from;if(R.p==='y'){const d=new Date(n);d.setDate(1);d.setMonth(d.getMonth()-11);from=lk(d).slice(0,7)}else from=D.tx.map(t=>t.ts.slice(0,7)).sort()[0]||cm;
+    keys=monthKeys(from,cm);mode=7;if(R.p==='a'&&keys.length>24){keys=[...new Set(keys.map(k=>k.slice(0,4)))];mode=4}}
+  return{keys,mode}}
+function setR(k,v){R[k]=v;render()}
+function tip(i){const d=R.data,k=d.keys[i],f=d.mode===10?new Date(k+'T12:00').toLocaleDateString('uk-UA',{day:'numeric',month:'long'}):d.mode===7?new Date(k+'-15T12:00').toLocaleDateString('uk-UA',{month:'long',year:'numeric'}):k;
+  $('tip').innerHTML=`<b>${f}</b> · <span class="pos">↑ ${money(d.inc[i],R.cur)}</span> · <span class="neg">↓ ${money(d.exp[i],R.cur)}</span>`}
+function reportView(){
+  const curs=[...new Set(act().map(a=>a.currency))];
+  if(!curs.length)return '<h1>Звіт</h1><div class="empty">📊<br>Спершу створіть рахунок<br>і додайте кілька записів</div>';
+  if(!curs.includes(R.cur))R.cur=curs[0];
+  const{keys,mode}=buckets(),idx=Object.fromEntries(keys.map((k,i)=>[k,i])),inc=keys.map(()=>0),exp=keys.map(()=>0),cat={};
+  D.tx.forEach(t=>{if(t.rev||t.xf||reversed(t.id))return;const a=D.accounts.find(x=>x.id===t.acc);if(a.archived||a.currency!==R.cur)return;
+    const i=idx[t.ts.slice(0,mode)];if(i===undefined)return;
+    if(t.amount>0)inc[i]+=t.amount;else exp[i]-=t.amount;
+    if((t.amount>0)===(R.t==='income'))cat[t.cat]=(cat[t.cat]||0)+Math.abs(t.amount)});
+  R.data={keys,mode,inc,exp};
+  const ti=r2(inc.reduce((a,b)=>a+b,0)),te=r2(exp.reduce((a,b)=>a+b,0)),seg=(key,opts)=>`<div class="seg">${opts.map(([v,l])=>`<button class="${R[key]===v?'on':''}" onclick="setR('${key}','${v}')">${l}</button>`).join('')}</div>`;
+  let h='<h1>Звіт</h1>'+seg('p',[['w','Тиждень'],['m','Місяць'],['y','Рік'],['a','Весь час']]);
+  if(curs.length>1)h+=`<div class="chips" style="margin:0 0 4px">${curs.map(c=>`<button class="chip ${R.cur===c?'on':''}" onclick="setR('cur','${c}')">${c}</button>`).join('')}</div>`;
+  h+=`<div class="sub" style="margin:0 4px">${PL[R.p]}</div><div class="stats"><div class="stat">Доходи<b class="pos">${money(ti,R.cur)}</b></div><div class="stat">Витрати<b class="neg">${money(te,R.cur)}</b></div><div class="stat">Баланс<b>${money(r2(ti-te),R.cur)}</b></div></div>`;
+  if(!ti&&!te)return h+'<div class="empty">🧾<br>У цьому періоді записів немає</div>';
+  const W=340,H=130,max=Math.max(1,...inc,...exp),gw=W/keys.length,bw=Math.min(14,gw*.38),step=keys.length>12?Math.ceil(keys.length/6):1;
+  const lab=k=>mode===10?(R.p==='w'?new Date(k+'T12:00').toLocaleDateString('uk-UA',{weekday:'short'}):k.slice(8)):mode===7?new Date(k+'-15T12:00').toLocaleDateString('uk-UA',{month:'short'}):k;
+  const bars=keys.map((k,i)=>{const x=i*gw+gw/2,hi=inc[i]/max*H,he=exp[i]/max*H;
+    return `<rect class="bi" x="${x-bw-.5}" y="${H-hi}" width="${bw}" height="${hi}" rx="2"/><rect class="be" x="${x+.5}" y="${H-he}" width="${bw}" height="${he}" rx="2"/>${i%step===0?`<text class="lb" x="${x}" y="${H+14}" text-anchor="middle">${lab(k)}</text>`:''}<rect x="${i*gw}" y="0" width="${gw}" height="${H+18}" fill="transparent" onclick="tip(${i})"/>`}).join('');
+  h+=`<h2>Динаміка</h2><div class="chart"><svg viewBox="0 0 ${W} ${H+20}"><line x1="0" x2="${W}" y1="${H}" y2="${H}" stroke="var(--sep)"/>${bars}</svg></div><div id="tip" class="sub" style="text-align:center;margin-top:8px;min-height:18px">Торкніться стовпчика, щоб побачити суми</div>`;
+  const rows=Object.entries(cat).sort((a,b)=>b[1]-a[1]),tot=rows.reduce((s,r)=>s+r[1],0);
+  h+=`<h2>За категоріями</h2>${seg('t',[['expense','Витрати'],['income','Доходи']])}`;
+  h+=rows.length?`<div class="grp">${rows.map(([id,v])=>{const c=D.cats.find(x=>x.id==id),pc=v/tot;return `<div class="rw"><div class="rt"><span>${esc(c?c.name:'—')}</span><span>${money(r2(v),R.cur)} · ${Math.round(pc*100)}%</span></div><div class="tr"><i style="width:${pc*100}%;background:var(--${R.t==='income'?'pos':'neg'})"></i></div></div>`}).join('')}</div>`:'<div class="empty" style="padding:20px 0">Немає записів цього типу</div>';
+  return h}
 const EM=['🛒','🍔','🚌','🏠','💊','🎮','👕','🎁','✈️','📚','🐶','💼','📈','💰'];
 function editAccount(id){const a=D.accounts.find(x=>x.id===id);
   sheet(`<h2 style="margin-top:0">Рахунок</h2><input id="en" value="${esc(a.name)}" maxlength="30">
