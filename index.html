@@ -67,7 +67,7 @@ function render(){for(const t of['home','hist','rep','cats','bk'])$('t-'+t).clas
 function home(){
   const tot={},fl={},m=now().slice(0,7),cur=id=>D.accounts.find(a=>a.id===id).currency;
   act().forEach(a=>tot[a.currency]=r2((tot[a.currency]||0)+bal(a)));
-  D.tx.filter(t=>!t.rev&&!t.xf&&!reversed(t.id)&&t.ts.slice(0,7)===m&&!D.accounts.find(a=>a.id===t.acc).archived).forEach(t=>{const c=cur(t.acc),f=fl[c]=fl[c]||{i:0,e:0};t.amount>0?f.i+=t.amount:f.e-=t.amount});
+  D.tx.filter(t=>!t.rev&&!t.xf&&!t.adj&&!reversed(t.id)&&t.ts.slice(0,7)===m&&!D.accounts.find(a=>a.id===t.acc).archived).forEach(t=>{const c=cur(t.acc),f=fl[c]=fl[c]||{i:0,e:0};t.amount>0?f.i+=t.amount:f.e-=t.amount});
   let h='';
   const days=D.lastExport?(Date.now()-new Date(D.lastExport))/864e5:Infinity;
   if(D.tx.length&&days>30)h+='<div class="warn">⚠️ Давно не було резервної копії. Дані лежать лише на цьому телефоні. Відкрийте вкладку «Копія».</div>';
@@ -86,7 +86,7 @@ function hist(){
   if(!D.tx.length)h+='<div class="empty">🧾<br>Записів ще немає</div>';
   [...D.tx].reverse().forEach(t=>{const d=t.ts.slice(0,10),a=D.accounts.find(x=>x.id===t.acc),c=D.cats.find(x=>x.id===t.cat),v=reversed(t.id);
     if(d!==day){day=d;h+=`<h2>${new Date(d+'T12:00').toLocaleDateString('uk-UA',{day:'numeric',month:'long',year:'numeric'})}</h2>`}
-    h+=`<div class="card ${v?'void':''}"><div>${esc(t.xf?(t.rev?'↩ Скасування переказу':'↔ Переказ'):t.rev?'↩ Скасування':c?c.name:'—')}<div class="sub">${esc(t.xf?a.name+' → '+D.accounts.find(x=>x.id===t.to).name:a.name)} · ${t.ts.slice(11,16)}${t.note?' · '+esc(t.note):''}</div>
+    h+=`<div class="card ${v?'void':''}"><div>${esc(t.xf?(t.rev?'↩ Скасування переказу':'↔ Переказ'):t.adj?'⚖ Коригування балансу':t.rev?'↩ Скасування':c?c.name:'—')}<div class="sub">${esc(t.xf?a.name+' → '+D.accounts.find(x=>x.id===t.to).name:a.name)} · ${t.ts.slice(11,16)}${t.note?' · '+esc(t.note):''}</div>
     ${!t.rev&&!v?`<button class="link" onclick="undo(${t.id})">Скасувати запис</button>`:''}</div>
     ${amtHtml(t,a)}</div>`});
   return h;
@@ -124,7 +124,7 @@ function reportView(){
   if(!curs.length)return '<h1>Звіт</h1><div class="empty">📊<br>Спершу створіть рахунок<br>і додайте кілька записів</div>';
   if(!curs.includes(R.cur))R.cur=curs[0];
   const{keys,mode}=buckets(),idx=Object.fromEntries(keys.map((k,i)=>[k,i])),inc=keys.map(()=>0),exp=keys.map(()=>0),cat={};
-  D.tx.forEach(t=>{if(t.rev||t.xf||reversed(t.id))return;const a=D.accounts.find(x=>x.id===t.acc);if(a.archived||a.currency!==R.cur)return;
+  D.tx.forEach(t=>{if(t.rev||t.xf||t.adj||reversed(t.id))return;const a=D.accounts.find(x=>x.id===t.acc);if(a.archived||a.currency!==R.cur)return;
     const i=idx[t.ts.slice(0,mode)];if(i===undefined)return;
     if(t.amount>0)inc[i]+=t.amount;else exp[i]-=t.amount;
     if((t.amount>0)===(R.t==='income'))cat[t.cat]=(cat[t.cat]||0)+Math.abs(t.amount)});
@@ -145,10 +145,20 @@ function reportView(){
   return h}
 const EM=['🛒','🍔','🚌','🏠','💊','🎮','👕','🎁','✈️','📚','🐶','💼','📈','💰'];
 function editAccount(id){const a=D.accounts.find(x=>x.id===id);
-  sheet(`<h2 style="margin-top:0">Рахунок</h2><input id="en" value="${esc(a.name)}" maxlength="30">
-  <div class="sub" style="margin:2px 4px">${ICON[a.kind]||''} ${a.currency} · ${money(bal(a),a.currency)}</div>
-  <button class="btn" onclick="renameAccount(${id})">Зберегти назву</button>
-  <button class="btn g" style="color:var(--neg)" onclick="delAccount(${id})">Видалити рахунок</button>`)}
+  sheet(`<h2 style="margin-top:0">Рахунок · ${a.currency}</h2>
+  <div class="sub" style="margin:0 4px">Назва</div><input id="en" value="${esc(a.name)}" maxlength="30">
+  <button class="btn g" onclick="renameAccount(${id})">Зберегти назву</button>
+  <div class="sub" style="margin:16px 4px 0">Баланс рахунку, ${a.currency}</div>
+  <input id="eb" type="number" inputmode="decimal" value="${bal(a)}">
+  <input id="ebn" placeholder="Причина (необов'язково)" maxlength="100">
+  <button class="btn" onclick="adjustBalance(${id})">Змінити баланс</button>
+  <div class="sub" style="margin:8px 4px 0">Різниця запишеться в історію як коригування, а не як дохід чи витрата.</div>
+  <button class="btn g" style="color:var(--neg);margin-top:20px" onclick="delAccount(${id})">Видалити рахунок</button>`)}
+function adjustBalance(id){const a=D.accounts.find(x=>x.id===id),v=parseFloat($('eb').value.replace(',','.'));
+  if(isNaN(v))return $('eb').focus();
+  const cur=bal(a),d=r2(v-cur);if(!d){closeSheet();return}
+  if(!confirm(`«${a.name}»: ${money(cur,a.currency)} → ${money(r2(v),a.currency)}\nВ історію додасться коригування ${d>0?'+':''}${money(d,a.currency)}.`))return;
+  D.tx.push({id:D.seq++,adj:true,acc:id,amount:d,note:$('ebn').value.trim().slice(0,100),ts:now()});save();closeSheet();render()}
 function renameAccount(id){const n=$('en').value.trim().slice(0,30);if(!n)return;D.accounts.find(x=>x.id===id).name=n;save();closeSheet();render()}
 function delAccount(id){const a=D.accounts.find(x=>x.id===id),used=D.tx.some(t=>t.acc===id||t.to===id),b=bal(a);
   const msg=used?`Рахунок «${a.name}» зникне зі списку, але його записи залишаться в історії.${b?` Його баланс (${money(b,a.currency)}) більше не враховуватиметься в підсумках.`:''} Продовжити?`:`Видалити порожній рахунок «${a.name}»?`;
