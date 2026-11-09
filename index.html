@@ -41,6 +41,12 @@ input,select{width:100%;font-size:17px;padding:12px 14px;border-radius:12px;bord
 .bi{fill:var(--pos)}.be{fill:var(--neg)}.lb{fill:var(--hint);font-size:9px}
 .grp{border-radius:16px;overflow:hidden;background:var(--bg)}.rw{padding:11px 16px;box-shadow:inset 0 -.5px 0 var(--sep)}
 .rt{display:flex;justify-content:space-between;gap:8px;font-size:15px;margin-bottom:7px}.tr{height:6px;border-radius:3px;background:var(--bg2);overflow:hidden}.tr i{display:block;height:100%;border-radius:3px}
+details.g{background:var(--bg);border-radius:16px;margin-bottom:8px;overflow:hidden}
+summary{list-style:none;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 16px;cursor:pointer}summary::-webkit-details-marker{display:none}
+summary .l{flex:1}.chev{color:var(--hint);font-size:22px;transition:transform .2s}details[open] .chev{transform:rotate(90deg)}
+details .card{border-radius:0!important;box-shadow:inset 0 .5px 0 var(--sep)!important}
+.inl{display:flex;gap:8px;align-items:center}.inl input{flex:1}.sgn{width:52px;height:46px;border:0;border-radius:12px;background:var(--bg2);color:var(--ac);font-size:20px;font-weight:700}
+input[type=date]{-webkit-appearance:none;appearance:none;min-height:46px;text-align:left}
 </style></head><body>
 <div id="app"></div>
 <button class="fab" onclick="addTx()" aria-label="Додати запис">+</button>
@@ -72,9 +78,11 @@ function home(){
   const days=D.lastExport?(Date.now()-new Date(D.lastExport))/864e5:Infinity;
   if(D.tx.length&&days>30)h+='<div class="warn">⚠️ Давно не було резервної копії. Дані лежать лише на цьому телефоні. Відкрийте вкладку «Копія».</div>';
   const cs=Object.keys(tot);
-  h+=cs.map(c=>{const f=fl[c]||{i:0,e:0};return `<div class="hero"><div class="sub">Баланс · ${c}</div><div class="num">${money(tot[c],c)}</div><div class="mo"><span class="pos">↑ ${money(f.i,c)}</span><span class="neg">↓ ${money(f.e,c)}</span><span class="sub" style="margin:0">цього місяця</span></div></div>`}).join('');
+  h+=cs.map(c=>{const f=fl[c]||{i:0,e:0};return `<div class="hero"><div class="sub">Баланс · ${c}</div><div class="num ${tot[c]<0?'neg':''}">${money(tot[c],c)}</div><div class="mo"><span class="pos">↑ ${money(f.i,c)}</span><span class="neg">↓ ${money(f.e,c)}</span><span class="sub" style="margin:0">цього місяця</span></div></div>`}).join('');
   if(!act().length)h+='<div class="empty">👛<br>Створіть перший рахунок,<br>щоб почати</div>';
-  if(act().length)h+='<h2>Рахунки</h2><div class="sub" style="margin:-4px 4px 8px">Натисніть на рахунок, щоб змінити назву або видалити</div>';h+=act().map(a=>`<div class="card" onclick="editAccount(${a.id})" style="cursor:pointer"><div class="l"><div class="ic">${ICON[a.kind]||'👛'}</div><div>${esc(a.name)}<div class="sub">${a.currency}</div></div></div><div class="big">${money(bal(a),a.currency)}</div></div>`).join('');
+  if(act().length)h+='<h2>Рахунки</h2><div class="sub" style="margin:-4px 4px 8px">Розгорніть групу й натисніть на рахунок, щоб змінити назву, баланс або видалити</div>';h+=['cash','card','bank',''].map(k=>{const L=act().filter(a=>k?a.kind===k:!GN[a.kind]);if(!L.length)return'';
+    const sm={};L.forEach(a=>sm[a.currency]=r2((sm[a.currency]||0)+bal(a)));
+    return `<details class="g" ${G[k||'o']?'open':''} ontoggle="G['${k||'o'}']=this.open;saveUi()"><summary><span class="l"><span class="ic">${ICON[k]||'👛'}</span><span>${GN[k]||'Інше'}<span class="sub" style="display:block">рахунків: ${L.length}</span></span></span><span class="r big">${Object.entries(sm).map(([c,v])=>`<span class="${v<0?'neg':''}">${money(v,c)}</span>`).join('<br>')}</span><span class="chev">›</span></summary>${L.map(accRow).join('')}</details>`}).join('');
   return h+'<button class="btn" onclick="addAccount()">+ Новий рахунок</button>';
 }
 function amtHtml(t,a){
@@ -84,7 +92,7 @@ function amtHtml(t,a){
 function hist(){
   let h='<h1>Історія</h1><div class="sub" style="margin:-8px 4px 12px">Записи не видаляються. Помилку скасовує зворотний запис.</div>',day='';
   if(!D.tx.length)h+='<div class="empty">🧾<br>Записів ще немає</div>';
-  [...D.tx].reverse().forEach(t=>{const d=t.ts.slice(0,10),a=D.accounts.find(x=>x.id===t.acc),c=D.cats.find(x=>x.id===t.cat),v=reversed(t.id);
+  [...D.tx].sort((x,y)=>y.ts.localeCompare(x.ts)||y.id-x.id).forEach(t=>{const d=t.ts.slice(0,10),a=D.accounts.find(x=>x.id===t.acc),c=D.cats.find(x=>x.id===t.cat),v=reversed(t.id);
     if(d!==day){day=d;h+=`<h2>${new Date(d+'T12:00').toLocaleDateString('uk-UA',{day:'numeric',month:'long',year:'numeric'})}</h2>`}
     h+=`<div class="card ${v?'void':''}"><div>${esc(t.xf?(t.rev?'↩ Скасування переказу':'↔ Переказ'):t.adj?'⚖ Коригування балансу':t.rev?'↩ Скасування':c?c.name:'—')}<div class="sub">${esc(t.xf?a.name+' → '+D.accounts.find(x=>x.id===t.to).name:a.name)} · ${t.ts.slice(11,16)}${t.note?' · '+esc(t.note):''}</div>
     ${!t.rev&&!v?`<button class="link" onclick="undo(${t.id})">Скасувати запис</button>`:''}</div>
@@ -143,13 +151,18 @@ function reportView(){
   h+=`<h2>За категоріями</h2>${seg('t',[['expense','Витрати'],['income','Доходи']])}`;
   h+=rows.length?`<div class="grp">${rows.map(([id,v])=>{const c=D.cats.find(x=>x.id==id),pc=v/tot;return `<div class="rw"><div class="rt"><span>${esc(c?c.name:'—')}</span><span>${money(r2(v),R.cur)} · ${Math.round(pc*100)}%</span></div><div class="tr"><i style="width:${pc*100}%;background:var(--${R.t==='income'?'pos':'neg'})"></i></div></div>`}).join('')}</div>`:'<div class="empty" style="padding:20px 0">Немає записів цього типу</div>';
   return h}
+const GN={cash:'Готівка',card:'Картки',bank:'Банки'};
+let G={};try{G=JSON.parse(localStorage.getItem('fin_ui'))||{}}catch(e){}
+function saveUi(){try{localStorage.setItem('fin_ui',JSON.stringify(G))}catch(e){}}
+const accRow=a=>{const b=bal(a);return `<div class="card" onclick="editAccount(${a.id})" style="cursor:pointer"><div><div>${esc(a.name)}</div><div class="sub">${a.currency}</div></div><div class="big ${b<0?'neg':''}">${money(b,a.currency)}</div></div>`};
+function flip(id){const i=$(id),v=i.value.trim();i.value=v.startsWith('-')?v.slice(1):'-'+v;i.focus()}
 const EM=['🛒','🍔','🚌','🏠','💊','🎮','👕','🎁','✈️','📚','🐶','💼','📈','💰'];
 function editAccount(id){const a=D.accounts.find(x=>x.id===id);
   sheet(`<h2 style="margin-top:0">Рахунок · ${a.currency}</h2>
   <div class="sub" style="margin:0 4px">Назва</div><input id="en" value="${esc(a.name)}" maxlength="30">
   <button class="btn g" onclick="renameAccount(${id})">Зберегти назву</button>
   <div class="sub" style="margin:16px 4px 0">Баланс рахунку, ${a.currency}</div>
-  <input id="eb" type="number" inputmode="decimal" value="${bal(a)}">
+  <div class="inl"><input id="eb" type="text" inputmode="decimal" value="${bal(a)}"><button class="sgn" onclick="flip('eb')">±</button></div>
   <input id="ebn" placeholder="Причина (необов'язково)" maxlength="100">
   <button class="btn" onclick="adjustBalance(${id})">Змінити баланс</button>
   <div class="sub" style="margin:8px 4px 0">Різниця запишеться в історію як коригування, а не як дохід чи витрата.</div>
@@ -185,7 +198,7 @@ function addAccount(){
   sheet(`<h2 style="margin-top:0">Новий рахунок</h2><input id="an" placeholder="Назва (напр. Моно, Гаманець)" maxlength="30">
   <div class="seg" id="ak">${Object.entries({cash:'Готівка',card:'Картка',bank:'Банк'}).map(([k,v],i)=>`<button data-k="${k}" class="${i?'':'on'}" onclick="pickKind(this)">${v}</button>`).join('')}</div>
   <select id="ac">${['UAH','USD','EUR','PLN','GBP','CZK','CHF'].map(c=>`<option>${c}</option>`).join('')}</select>
-  <input id="ao" type="number" inputmode="decimal" placeholder="Початковий баланс (необов'язково)">
+  <div class="inl"><input id="ao" type="text" inputmode="decimal" placeholder="Початковий баланс (можна відʼємний)"><button class="sgn" onclick="flip('ao')">±</button></div>
   <button class="btn" onclick="saveAccount()">Створити</button>`)}
 function pickKind(b){[...b.parentNode.children].forEach(x=>x.className='');b.className='on'}
 function saveAccount(){const name=$('an').value.trim();if(!name)return;
@@ -194,7 +207,7 @@ function addTx(){if(!act().length)return addAccount();F={type:'expense',cat:null
 function txSheet(){
   const A=act();
   if(F.type==='transfer'&&A.length<2){alert('Для переказу потрібно щонайменше два рахунки.');F.type='expense'}
-  const xf=F.type==='transfer',keep=['amt','amt2','note'].map(i=>$(i)?.value||''),from=A.find(a=>a.id===F.acc);
+  const xf=F.type==='transfer',keep=['amt','amt2','note','dt'].map(i=>$(i)?.value||''),from=A.find(a=>a.id===F.acc);
   if(xf&&(F.to===undefined||F.to===F.acc))F.to=A.find(a=>a.id!==F.acc).id;
   const opt=sel=>A.map(a=>`<option value="${a.id}" ${a.id===sel?'selected':''}>${ICON[a.kind]||''} ${esc(a.name)} · ${a.currency}</option>`).join('');
   const seg=`<div class="seg">${[['expense','Витрата'],['income','Дохід'],['transfer','Переказ']].map(([t,l])=>`<button class="${F.type===t?'on':''}" onclick="F.type='${t}';F.cat=null;txSheet()">${l}</button>`).join('')}</div>`;
@@ -203,23 +216,24 @@ function txSheet(){
     <div class="sub" style="margin:4px 4px 0">З рахунку</div><select onchange="F.acc=+this.value;txSheet()">${opt(F.acc)}</select>
     <div class="sub" style="margin:4px 4px 0">На рахунок</div><select onchange="F.to=+this.value;txSheet()">${opt(F.to)}</select>
     ${to.currency!==from.currency?`<div class="sub" style="margin:4px 4px 0">Скільки зарахується (${to.currency})</div><input id="amt2" type="number" inputmode="decimal" placeholder="0 ${to.currency}" value="${keep[1]}">`:''}
-    <input id="note" placeholder="Коментар (необов'язково)" maxlength="200" value="${esc(keep[2])}"><button class="btn" onclick="saveTx()">Зберегти</button>`);return}
+    <div class="sub" style="margin:4px 4px 0">Дата</div><input id="dt" type="date" max="${lk(new Date())}" value="${keep[3]||lk(new Date())}"><input id="note" placeholder="Коментар (необов'язково)" maxlength="200" value="${esc(keep[2])}"><button class="btn" onclick="saveTx()">Зберегти</button>`);return}
   const cats=D.cats.filter(c=>c.type===F.type&&!c.archived);
   sheet(`${seg}<input id="amt" class="amt" type="number" inputmode="decimal" placeholder="0 ${from.currency}" value="${keep[0]}">
   <select onchange="F.acc=+this.value;txSheet()">${opt(F.acc)}</select>
   <div class="chips">${cats.map(c=>`<button class="chip ${F.cat===c.id?'on':''}" onclick="F.cat=${c.id};txSheet()">${esc(c.name)}</button>`).join('')}<button class="chip" onclick="newCat()">＋</button></div>
-  <input id="note" placeholder="Коментар (необов'язково)" maxlength="200" value="${esc(keep[2])}"><button class="btn" onclick="saveTx()">Зберегти</button>`)}
+  <div class="sub" style="margin:4px 4px 0">Дата</div><input id="dt" type="date" max="${lk(new Date())}" value="${keep[3]||lk(new Date())}"><input id="note" placeholder="Коментар (необов'язково)" maxlength="200" value="${esc(keep[2])}"><button class="btn" onclick="saveTx()">Зберегти</button>`)}
 function newCat(){const name=(prompt('Назва категорії (можна з емодзі)')||'').trim().slice(0,30);if(!name)return;
   const c={id:D.seq++,type:F.type,name};D.cats.push(c);F.cat=c.id;save();txSheet()}
 function saveTx(){
   const num=id=>parseFloat(($(id)?.value||'').replace(',','.')),v=num('amt');if(!(v>0))return $('amt').focus();
+  const dv=$('dt').value,td=lk(new Date()),ts=dv&&dv<td?dv+' 12:00:00':now();
   if(F.type==='transfer'){
     const a=D.accounts.find(x=>x.id===F.acc),b=D.accounts.find(x=>x.id===F.to);let w=v;
     if(a.currency!==b.currency){w=num('amt2');if(!(w>0))return $('amt2').focus()}
-    D.tx.push({id:D.seq++,xf:true,acc:a.id,to:b.id,amount:-r2(v),amountTo:r2(w),note:$('note').value.slice(0,200),ts:now()});
+    D.tx.push({id:D.seq++,xf:true,acc:a.id,to:b.id,amount:-r2(v),amountTo:r2(w),note:$('note').value.slice(0,200),ts});
   }else{
     if(!F.cat)return alert('Оберіть категорію');
-    D.tx.push({id:D.seq++,acc:F.acc,cat:F.cat,amount:r2(F.type==='income'?v:-v),note:$('note').value.slice(0,200),ts:now()});
+    D.tx.push({id:D.seq++,acc:F.acc,cat:F.cat,amount:r2(F.type==='income'?v:-v),note:$('note').value.slice(0,200),ts});
   }
   save();closeSheet();render()}
 async function exportData(){
